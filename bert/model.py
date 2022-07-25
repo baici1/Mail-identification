@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from transformers import BertConfig, BertModel
-from pre_processing import pre_processing
 
 
 class Bert(nn.Module):
