@@ -33,10 +33,3 @@ class Bert(nn.Module):
         # Multiclassification(classific_num>2)
         else:
             return out
-
-
-# model = Bert(classific_num=2)
-# # print(model.parameters)
-# model.eval()
-# output = model(pre_processing("trec06c/data/000/011", 512))
-# print(output)
