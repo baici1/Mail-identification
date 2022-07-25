@@ -22,6 +22,3 @@ def pre_processing(path, max_length=512):
         return_tensors="pt",
     )
     return mail_token
-
-
-# print(pre_processing("trec06c/data/000/011", 512))
