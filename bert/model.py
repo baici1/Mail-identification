@@ -20,10 +20,7 @@ class Bert(nn.Module):
             param.requires_grad = True
         pooler_fc_size = config.num_labels
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
-        if classific_num == 2:
-            self.fc = nn.Linear(pooler_fc_size, 1)
-        else:
-            self.fc = nn.Linear(pooler_fc_size, classific_num)
+        self.fc = nn.Linear(pooler_fc_size, classific_num)
 
     def forward(self, x):
         """return the logits after the sigmod layer
@@ -36,9 +33,4 @@ class Bert(nn.Module):
         """
         cls = self.backbone(**x).pooler_output
         out = self.fc(self.dropout(cls.squeeze(0)))
-        # Binaryclassification(classific_num=2)
-        if self.classific_num == 2:
-            return torch.sigmoid(out)
-        # Multiclassification(classific_num>2)
-        else:
-            return out
+        return out

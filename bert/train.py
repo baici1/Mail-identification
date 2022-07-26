@@ -1,13 +1,14 @@
 from collections import OrderedDict
 from glob import glob
-import math
+import json
 import os
 import random
+import shutil
 import time
 import numpy as np
 import torch
 import torch.nn as nn
-from torch import dtype, optim
+from torch import optim
 from torch.utils.data import DataLoader
 import argparse
 from torch.utils.tensorboard import SummaryWriter
@@ -36,15 +37,24 @@ class Train:
         self.pin_memory = config["pin_memory"]
         self.lr = config["lr"]
         self.weight_decay = config["weight_decay"]
-        self.tensorboard_step = config["tensorboard_step"]
+        self.record_step = config["record_step"]
         self.device = config["device"]
+        self.seed = config["seed"]
         self.resume = config["resume"]
 
-        self.writer = SummaryWriter(os.path.join(self.path + "log"))
         self.train_indices = OrderedDict()
         self.valid_indices = OrderedDict()
         self.start_epoch = 0
         self.forward_step = 0
+
+    def tensorboard_init(self) -> None:
+        log_path = os.path.join(self.result_path, "log")
+        try:
+            shutil.rmtree(log_path)
+            print("The folder of tensorboard has been emptied. Init!")
+        except:
+            print("The folder of tensorboard does not exist. Init!")
+        self.writer = SummaryWriter(log_path)
 
     def setup_seed(self) -> None:
         torch.manual_seed(self.seed)
@@ -59,7 +69,7 @@ class Train:
         )
         self.train_iter = DataLoader(
             dataset=TrainDataset(
-                *zip(train_data_path_and_label_list),
+                *zip(*train_data_path_and_label_list),
                 self.pre_train_model,
                 self.max_length,
                 "train"
@@ -71,7 +81,7 @@ class Train:
         )
         self.valid_iter = DataLoader(
             dataset=TrainDataset(
-                *zip(vaild_data_path_and_label_list),
+                *zip(*vaild_data_path_and_label_list),
                 self.pre_train_model,
                 self.max_length,
                 "valid"
@@ -86,10 +96,7 @@ class Train:
         self.model = Bert(self.pre_train_model, self.classific_num, self.resume)
 
     def define_loss(self) -> None:
-        if self.classific_num == 2:
-            self.cls_loss = nn.BCELoss()
-        else:
-            self.cls_loss = nn.CrossEntropyLoss()
+        self.cls_loss = nn.CrossEntropyLoss()
 
     def define_optim(self) -> None:
         self.optim = optim.AdamW(
@@ -138,10 +145,10 @@ class Train:
     def split(data_path_and_label_list, train_ratio=0.9):
         length = len(data_path_and_label_list)
         offset = int(length * train_ratio)
-        shuffled_data_path_and_label_list = random.shuffle(data_path_and_label_list)
+        random.shuffle(data_path_and_label_list)
         return (
-            shuffled_data_path_and_label_list[:offset],
-            shuffled_data_path_and_label_list[offset:],
+            data_path_and_label_list[:offset],
+            data_path_and_label_list[offset:],
         )
 
     @staticmethod
@@ -169,50 +176,81 @@ class Train:
             # train
             self.model.train()
             print("train:")
-            for x, label in tqdm(self.train_iter, total=len(self.train_iter)):
-                self.forward_step += 1
-                self.optim.zero_grad()
-                x, label = (
-                    x.to(dtype=torch.float),
-                    label.to(dtype=torch.long),
-                )
-                if self.device == "cuda":
-                    x, label = (x.cuda(), label.cuda())
-                out = self.model(x)
-                loss = self.cls_loss(out, label)
-                loss.backward()
-                self.optim.step()
-                train_loss = loss.item()
-                train_acc = self.get_acc(out, label)
-
-                self.train_indices[self.forward_step] = {
-                    "train_loss": train_loss,
-                    "train_acc": train_acc,
-                }
-                self.writer.add_scalar("loss/train", train_loss, self.forward_step)
-                self.writer.add_scalar("acc/train", train_acc, self.forward_step)
-
-            # valid
-            self.model.eval()
-            with torch.no_grad():
-                for x, label in tqdm(self.valid_iter, total=len(self.valid_iter)):
+            for x, label in self.train_iter:
+                with tqdm(total=len(self.train_iter)) as _tqdm:
+                    _tqdm.set_description(
+                        "epoch: {}/{}".format(epoch, self.num_epochs + 1)
+                    )
+                    self.forward_step += 1
+                    self.optim.zero_grad()
                     x, label = (
                         x.to(dtype=torch.float),
                         label.to(dtype=torch.long),
                     )
-                if self.device == "cuda":
-                    x, label = (x.cuda(), label.cuda())
-                out = self.model(x)
-                loss = self.cls_loss(out, label)
-                valid_loss = loss.item()
-                valid_acc = self.get_acc(out, label)
+                    if self.device == "cuda":
+                        x, label = (x.cuda(), label.cuda())
+                    out = self.model(x)
+                    loss = self.cls_loss(out, label)
+                    loss.backward()
+                    self.optim.step()
 
-                self.valid_indices[self.forward_step] = {
-                    "valid_loss": valid_loss,
-                    "valid_acc": valid_acc,
-                }
-                self.writer.add_scalar("loss/valid", valid_loss, self.forward_step)
-                self.writer.add_scalar("acc/valid", valid_acc, self.forward_step)
+                    train_loss = loss.item()
+                    train_acc = self.get_acc(out, label)
+
+                    _tqdm.set_postfix(
+                        loss="{:.4f}".format(train_loss), acc="{:.4f}".format(train_acc)
+                    )
+                    _tqdm.update(1)
+
+                    if self.forward_step % self.record_step == 0:
+                        self.train_indices[self.forward_step] = {
+                            "train_loss": train_loss,
+                            "train_acc": train_acc,
+                        }
+                        self.writer.add_scalar(
+                            "loss/train", train_loss, self.forward_step
+                        )
+                        self.writer.add_scalar(
+                            "acc/train", train_acc, self.forward_step
+                        )
+
+            # valid
+            print("valid:")
+            self.model.eval()
+            with torch.no_grad():
+                for x, label in self.valid_iter:
+                    with tqdm(total=len(self.valid_iter)) as _tqdm:
+                        _tqdm.set_description(
+                            "epoch: {}/{}".format(epoch, self.num_epochs + 1)
+                        )
+                        x, label = (
+                            x.to(dtype=torch.float),
+                            label.to(dtype=torch.long),
+                        )
+                        if self.device == "cuda":
+                            x, label = (x.cuda(), label.cuda())
+                        out = self.model(x)
+                        loss = self.cls_loss(out, label)
+                        valid_loss = loss.item()
+                        valid_acc = self.get_acc(out, label)
+
+                        _tqdm.set_postfix(
+                            loss="{:.4f}".format(valid_loss),
+                            acc="{:.4f}".format(valid_acc),
+                        )
+                        _tqdm.update(1)
+
+                        if self.forward_step % self.record_step == 0:
+                            self.valid_indices[self.forward_step] = {
+                                "valid_loss": valid_loss,
+                                "valid_acc": valid_acc,
+                            }
+                            self.writer.add_scalar(
+                                "loss/valid", valid_loss, self.forward_step
+                            )
+                            self.writer.add_scalar(
+                                "acc/valid", valid_acc, self.forward_step
+                            )
 
             print(
                 "Epoch %d time: %4.4f. \
@@ -230,3 +268,27 @@ class Train:
             if epoch % 1 == 0:
                 self.start_epoch = epoch
                 self.save_model(os.path.join(self.result_path, "model"), epoch)
+        print("training finished!")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="train")
+    parser.add_argument(
+        "--config_path",
+        type=str,
+        default="config/train_config.json",
+        help="the path of train config",
+    )
+    args = parser.parse_args()
+    with open(args.config_path, "r") as f:
+        config = json.load(f)
+        print("config:")
+        print(json.dumps(config, indent=4))
+    train = Train(config=config)
+    train.tensorboard_init()
+    train.setup_seed()
+    train.dataload()
+    train.build_model()
+    train.define_loss()
+    train.define_optim()
+    # train.train()
