@@ -1,7 +1,7 @@
 from transformers import BertTokenizer
 
 
-def pre_processing(path, max_length=512):
+def pre_processing(path, pre_train_model="chinese-bert-wwm", max_length=512):
     """return Bert input
 
     Args:
@@ -12,7 +12,7 @@ def pre_processing(path, max_length=512):
     """
     with open(path, "r", encoding="gb18030", errors="ignore") as f:
         mail = "".join(f.readlines())
-    tokenizer = BertTokenizer.from_pretrained("chinese-bert-wwm")
+    tokenizer = BertTokenizer.from_pretrained(pre_train_model)
     mail_token = tokenizer(
         mail,
         add_special_tokens=True,

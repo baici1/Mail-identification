@@ -4,6 +4,8 @@ from requests import get
 import torch
 from torch.utils.data import Dataset
 
+from pre_processing import pre_processing
+
 
 class GetData:
     def __init__(self, dir) -> None:
@@ -38,14 +40,41 @@ class GetData:
 
 
 class TrainDataset(Dataset):
-    def __init__(self, data_path_list, label_list, phase) -> None:
+    def __init__(
+        self,
+        data_path_list,
+        label_list,
+        pre_train_model="chinese-bert-wwm",
+        max_length=512,
+        phase="train",
+    ) -> None:
         super().__init__()
+        assert phase in ["train", "valid"]
         self.data_path_list = data_path_list
         self.label_list = np.array(label_list)
+        self.pre_train_model = pre_train_model
+        self.max_length = max_length
         self.phase = phase
 
+    def __getitem__(self, index) -> torch.tensor and torch.tensor:
+        # train and vaild dataset pipeline
+        if self.phase == "train":
+            mail_token = pre_processing(
+                self.data_path_list[index], self.pre_train_model, self.max_length
+            )
+            label = self.label_list[index]
+        else:
+            mail_token = pre_processing(
+                self.data_path_list[index], self.pre_train_model, self.max_length
+            )
+            label = self.label_list[index]
+        return mail_token, label
 
-class InferenceDataset(Dataset):
+    def __len__(self) -> int:
+        return len(self.label_list)
+
+
+class TestDataset(Dataset):
     def __init__(self) -> None:
         super().__init__()
 
