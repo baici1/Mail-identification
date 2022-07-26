@@ -1,3 +1,4 @@
+from typing import OrderedDict
 import numpy as np
 import os
 from requests import get
@@ -7,36 +8,27 @@ from torch.utils.data import Dataset
 from pre_processing import pre_processing
 
 
-class GetData:
-    def __init__(self, dir) -> None:
-        with open(os.path.join(dir, "full/index"), "r") as f:
-            index = np.array(f.readlines())
-            data_path_list, label_list = zip(
-                *[(x.split(" ")[1], x.split(" ")[0]) for x in index]
-            )
-            self.data_path_list = [
-                x.replace("..", dir).replace("\n", "") for x in data_path_list
-            ]
-            self.label_list = [1 if x == "spam" else 0 for x in label_list]
-            assert (
-                type(self.data_path_list[0]) == str and type(self.label_list[0]) == int
-            )
+def get_data(data_dir) -> list(tuple()):
+    """return the paths and labels of data
 
-    def get_data_path_list(self) -> list:
-        """return path of data
+    Args:
+        data_dir (str): the dir of data
 
-        Returns:
-            list[str]: [N,]
-        """
-        return self.data_path_list
-
-    def get_label_list(self) -> list:
-        """return label
-
-        Returns:
-            list[int]: [N,]
-        """
-        return self.label_list
+    Returns:
+        list[tuple]: the paths and labels of data, [N, 2],
+        the first dim is path of data, the second dim is label
+    """
+    with open(os.path.join(data_dir, "full/index"), "r") as f:
+        index = np.array(f.readlines())
+        data_path_list, label_list = zip(
+            *[(x.split(" ")[1], x.split(" ")[0]) for x in index]
+        )
+        data_path_list = [
+            x.replace("..", data_dir).replace("\n", "") for x in data_path_list
+        ]
+        label_list = [1 if x == "spam" else 0 for x in label_list]
+        assert type(data_path_list[0]) == str and type(label_list[0]) == int
+        return list(zip(data_path_list, label_list))
 
 
 class TrainDataset(Dataset):
@@ -77,9 +69,3 @@ class TrainDataset(Dataset):
 class TestDataset(Dataset):
     def __init__(self) -> None:
         super().__init__()
-
-
-get_data = GetData("trec06c")
-train_data_set = TrainDataset(
-    get_data.get_data_path_list, get_data.get_label_list, "train"
-)

@@ -1,0 +1,19 @@
+{
+    "pre_train_model": "chinese-bert-wwm",
+    "data_dir": "trec06c",
+    "result_path": "result/train1",
+    "batch_size": 32,
+    "max_length": 512,
+    "num_epochs": 4,
+    "classific_num": 2,
+    "num_workers": 8,
+    "pin_memory": true,
+    "lr": {
+        "backbone": 1e-5,
+        "fc": 3e-4
+    },
+    "weight_decay": 1e-4,
+    "tensorboard_step": 10,
+    "device": "cuda",
+    "resume": true
+}
