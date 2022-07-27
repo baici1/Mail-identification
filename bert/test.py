@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from flask import  Flask
 import flask
+from flask_cors import CORS
 from model import Bert
 
 from pre_processing import pre_processing
@@ -55,6 +56,7 @@ def start_flask():
     except:
         return {"state":"fail", "information":"wrong format"}
 
+CORS(app, resources="/result")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="test")
     parser.add_argument(
@@ -72,4 +74,4 @@ if __name__ == "__main__":
     test.setup_seed()
     test.build_model()
     test.load_model()
-    app.run(debug=True)
+    app.run(port=5001, debug=True)
