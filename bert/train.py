@@ -181,7 +181,7 @@ class Train:
             total_train_loss = 0
             total_train_acc = 0
             with tqdm(total=len(self.train_iter), ncols=100) as _tqdm:
-                _tqdm.set_description("epoch: {}/{}".format(epoch, self.num_epochs + 1))
+                _tqdm.set_description("epoch: {}/{}".format(epoch, self.num_epochs))
                 for *x, label in self.train_iter:
                     self.forward_step += 1
                     self.optim.zero_grad()
@@ -232,9 +232,7 @@ class Train:
                 total_valid_loss = 0
                 total_valid_acc = 0
                 with tqdm(total=len(self.valid_iter), ncols=100) as _tqdm:
-                    _tqdm.set_description(
-                        "epoch: {}/{}".format(epoch, self.num_epochs + 1)
-                    )
+                    _tqdm.set_description("epoch: {}/{}".format(epoch, self.num_epochs))
                     for *x, label in self.valid_iter:
                         label = label.to(dtype=torch.long)
                         if self.device == "cuda":
@@ -270,8 +268,7 @@ class Train:
                 )
 
             print(
-                "Epoch %d time: %4.4f. \
-                    Train Loss: %f, Train Acc: %f, Valid Loss: %f, Valid Acc: %f"
+                "Epoch %d time: %4.4f. Train Loss: %f, Train Acc: %f, Valid Loss: %f, Valid Acc: %f"
                 % (
                     epoch,
                     time.time() - start_time,

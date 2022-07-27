@@ -4,7 +4,7 @@
     "result_path": "result/train1",
     "batch_size": 8,
     "max_length": 512,
-    "num_epochs": 4,
+    "num_epochs": 3,
     "classific_num": 2,
     "num_workers": 16,
     "pin_memory": true,
@@ -13,7 +13,7 @@
         "fc": 3e-4
     },
     "weight_decay": 1e-4,
-    "record_step": 10,
+    "record_step": 1000,
     "device": "cuda",
     "seed": 2022,
     "resume": false
