@@ -1,0 +1,9 @@
+{
+    "pre_train_model": "chinese-bert-wwm",
+    "model_path": "result/train1/model/model_params_0000003.pt",
+    "max_length": 512,
+    "classific_num": 2,
+    "device": "cpu",
+    "seed": 2022,
+    "resume": true
+}

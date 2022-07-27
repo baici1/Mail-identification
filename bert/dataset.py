@@ -50,15 +50,15 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, index) -> tuple:
         # train and vaild dataset pipeline
+        with open(
+            self.data_path_list[index], "r", encoding="gb18030", errors="ignore"
+        ) as f:
+            mail = "".join(f.readlines())
         if self.phase == "train":
-            mail_token = pre_processing(
-                self.data_path_list[index], self.pre_train_model, self.max_length
-            )
+            mail_token = pre_processing(mail, self.pre_train_model, self.max_length)
             label = self.label_list[index]
         else:
-            mail_token = pre_processing(
-                self.data_path_list[index], self.pre_train_model, self.max_length
-            )
+            mail_token = pre_processing(mail, self.pre_train_model, self.max_length)
             label = self.label_list[index]
         input_ids = mail_token["input_ids"].squeeze(0)
         attention_mask = mail_token["attention_mask"].squeeze(0)

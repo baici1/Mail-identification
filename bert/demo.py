@@ -1,15 +1,7 @@
-import random
-import torch
+import requests
 
+url = "http://127.0.0.1:5000/result"
+data = {"text":"这个是不是垃圾邮件"}
+res = requests.post(url=url,data=data).text
+print(res)
 
-def f():
-    return 1, 2, 3, 4
-
-
-# a = [(1, 2), (3, 4), (5, 6)]
-# # f(*zip(*a))
-# random.shuffle(a)
-# print(a)
-
-*x, y = f()
-print(x)
