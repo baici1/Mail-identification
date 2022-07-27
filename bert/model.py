@@ -18,9 +18,8 @@ class Bert(nn.Module):
         # Fine-tune
         for param in self.backbone.parameters():
             param.requires_grad = True
-        pooler_fc_size = config.num_labels
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
-        self.fc = nn.Linear(pooler_fc_size, classific_num)
+        self.fc = nn.Linear(config.pooler_fc_size, classific_num)
 
     def forward(self, x):
         """return the logits after the sigmod layer
@@ -31,6 +30,8 @@ class Bert(nn.Module):
         Returns:
             tensor: [B, classific_num]
         """
-        cls = self.backbone(**x).pooler_output
-        out = self.fc(self.dropout(cls.squeeze(0)))
+        out = self.backbone(
+            input_ids=x[0], attention_mask=x[1], token_type_ids=x[2]
+        ).pooler_output
+        out = self.fc(self.dropout(out))
         return out

@@ -48,7 +48,7 @@ class TrainDataset(Dataset):
         self.max_length = max_length
         self.phase = phase
 
-    def __getitem__(self, index) -> torch.tensor and torch.tensor:
+    def __getitem__(self, index) -> tuple:
         # train and vaild dataset pipeline
         if self.phase == "train":
             mail_token = pre_processing(
@@ -60,7 +60,10 @@ class TrainDataset(Dataset):
                 self.data_path_list[index], self.pre_train_model, self.max_length
             )
             label = self.label_list[index]
-        return mail_token, label
+        input_ids = mail_token["input_ids"].squeeze(0)
+        attention_mask = mail_token["attention_mask"].squeeze(0)
+        token_type_ids = mail_token["token_type_ids"].squeeze(0)
+        return input_ids, attention_mask, token_type_ids, label
 
     def __len__(self) -> int:
         return len(self.label_list)

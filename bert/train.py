@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+import torch.cuda.amp as amp
 
 from dataset import TrainDataset, get_data
 from model import Bert
@@ -65,7 +66,7 @@ class Train:
     def dataload(self) -> None:
         data_path_and_label_list = get_data(self.data_dir)
         train_data_path_and_label_list, vaild_data_path_and_label_list = self.split(
-            data_path_and_label_list, 0.1
+            data_path_and_label_list, 0.9
         )
         self.train_iter = DataLoader(
             dataset=TrainDataset(
@@ -108,6 +109,7 @@ class Train:
             lr=self.lr["backbone"],
             weight_decay=self.weight_decay,
         )
+        self.scaler = amp.GradScaler()
 
     def save_model(self, path, step) -> None:
         folder = os.path.exists(path)
@@ -176,31 +178,40 @@ class Train:
             # train
             self.model.train()
             print("train:")
-            for x, label in self.train_iter:
-                with tqdm(total=len(self.train_iter)) as _tqdm:
-                    _tqdm.set_description(
-                        "epoch: {}/{}".format(epoch, self.num_epochs + 1)
-                    )
+            total_train_loss = 0
+            total_train_acc = 0
+            with tqdm(total=len(self.train_iter), ncols=100) as _tqdm:
+                _tqdm.set_description("epoch: {}/{}".format(epoch, self.num_epochs + 1))
+                for *x, label in self.train_iter:
                     self.forward_step += 1
                     self.optim.zero_grad()
-                    x, label = (
-                        x.to(dtype=torch.float),
-                        label.to(dtype=torch.long),
-                    )
+                    label = label.to(dtype=torch.long)
                     if self.device == "cuda":
-                        x, label = (x.cuda(), label.cuda())
-                    out = self.model(x)
-                    loss = self.cls_loss(out, label)
-                    loss.backward()
-                    self.optim.step()
+                        x = [t.cuda() for t in x]
+                        label = label.cuda()
+
+                        with amp.autocast():
+                            out = self.model(x)
+                            loss = self.cls_loss(out, label)
+                        self.scaler.scale(loss).backward()
+                        self.scaler.step(self.optim)
+                        self.scaler.update()
+                    else:
+                        out = self.model(x)
+                        loss = self.cls_loss(out, label)
+                        loss.backward()
+                        self.optim.step()
 
                     train_loss = loss.item()
                     train_acc = self.get_acc(out, label)
+                    total_train_loss += train_loss
+                    total_train_acc += train_acc
 
                     _tqdm.set_postfix(
                         loss="{:.4f}".format(train_loss), acc="{:.4f}".format(train_acc)
                     )
                     _tqdm.update(1)
+                    time.sleep(0.01)
 
                     if self.forward_step % self.record_step == 0:
                         self.train_indices[self.forward_step] = {
@@ -218,39 +229,45 @@ class Train:
             print("valid:")
             self.model.eval()
             with torch.no_grad():
-                for x, label in self.valid_iter:
-                    with tqdm(total=len(self.valid_iter)) as _tqdm:
-                        _tqdm.set_description(
-                            "epoch: {}/{}".format(epoch, self.num_epochs + 1)
-                        )
-                        x, label = (
-                            x.to(dtype=torch.float),
-                            label.to(dtype=torch.long),
-                        )
+                total_valid_loss = 0
+                total_valid_acc = 0
+                with tqdm(total=len(self.valid_iter), ncols=100) as _tqdm:
+                    _tqdm.set_description(
+                        "epoch: {}/{}".format(epoch, self.num_epochs + 1)
+                    )
+                    for *x, label in self.valid_iter:
+                        label = label.to(dtype=torch.long)
                         if self.device == "cuda":
-                            x, label = (x.cuda(), label.cuda())
+                            x = [t.cuda() for t in x]
+                            label = label.cuda()
                         out = self.model(x)
                         loss = self.cls_loss(out, label)
                         valid_loss = loss.item()
                         valid_acc = self.get_acc(out, label)
+                        total_valid_loss += valid_loss
+                        total_valid_acc += valid_acc
 
                         _tqdm.set_postfix(
                             loss="{:.4f}".format(valid_loss),
                             acc="{:.4f}".format(valid_acc),
                         )
                         _tqdm.update(1)
+                        time.sleep(0.01)
 
-                        if self.forward_step % self.record_step == 0:
-                            self.valid_indices[self.forward_step] = {
-                                "valid_loss": valid_loss,
-                                "valid_acc": valid_acc,
-                            }
-                            self.writer.add_scalar(
-                                "loss/valid", valid_loss, self.forward_step
-                            )
-                            self.writer.add_scalar(
-                                "acc/valid", valid_acc, self.forward_step
-                            )
+                self.valid_indices[epoch] = {
+                    "valid_loss": total_valid_loss / len(self.valid_iter),
+                    "valid_acc": total_valid_acc / len(self.valid_iter),
+                }
+                self.writer.add_scalar(
+                    "loss/valid",
+                    total_valid_loss / len(self.valid_iter),
+                    epoch,
+                )
+                self.writer.add_scalar(
+                    "acc/valid",
+                    total_valid_acc / len(self.valid_iter),
+                    epoch,
+                )
 
             print(
                 "Epoch %d time: %4.4f. \
@@ -258,10 +275,10 @@ class Train:
                 % (
                     epoch,
                     time.time() - start_time,
-                    train_loss,
-                    train_acc,
-                    valid_loss,
-                    valid_acc,
+                    total_train_loss / len(self.train_iter),
+                    total_train_acc / len(self.train_iter),
+                    total_valid_loss / len(self.valid_iter),
+                    total_valid_acc / len(self.valid_iter),
                 )
             )
 
@@ -291,4 +308,4 @@ if __name__ == "__main__":
     train.build_model()
     train.define_loss()
     train.define_optim()
-    # train.train()
+    train.train()

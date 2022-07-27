@@ -18,6 +18,7 @@ def pre_processing(path, pre_train_model="chinese-bert-wwm", max_length=512):
         add_special_tokens=True,
         max_length=max_length,
         padding="max_length",
+        truncation=True,
         return_tensors="pt",
     )
     return mail_token
